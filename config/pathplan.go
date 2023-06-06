@@ -6,7 +6,6 @@ package config
 
 import (
 	"container/heap"
-	"sync/atomic"
 )
 
 // PathPlan is a struct used for path planning
@@ -52,33 +51,32 @@ func (path *PathPlan) GetNN(new_ms *MileStone) NeighborHeap {
 			neighbor := NewNeighborItem(ms, dist)
 			heap.Push(&neighborhood, neighbor)
 		}
-		for _, child := range ms.children {
-			if child != nil && child.OccupiedFlag == 1 {
-				DFS(child)
-			}
+		for _, child := range ms.children.GetChildren() {
+			DFS(child)
 		}
 	}
 	DFS(path.pathHead)
+
 	return neighborhood
 }
 
-// Set neighbors as occupied, return nil and unset all if any are occupied
-func SetNNOccupied(neighbors NeighborHeap) NeighborHeap {
-	for idx, nItem := range neighbors {
-		if !atomic.CompareAndSwapInt32(&nItem.Neighbor.OccupiedFlag, 0, 1) {
-			SetNNUnoccupied(neighbors[:idx+1])
-			return nil
-		}
-	}
-	return neighbors
-}
+// // Set neighbors as occupied, return nil and unset all if any are occupied
+// func SetNNOccupied(neighbors NeighborHeap) NeighborHeap {
+// 	for idx, nItem := range neighbors {
+// 		if !atomic.CompareAndSwapInt32(&nItem.Neighbor.OccupiedFlag, 0, 1) {
+// 			SetNNUnoccupied(neighbors[:idx+1])
+// 			return nil
+// 		}
+// 	}
+// 	return neighbors
+// }
 
-// Set neighbors as unoccupied
-func SetNNUnoccupied(neighbors NeighborHeap) {
-	for _, nItem := range neighbors {
-		atomic.CompareAndSwapInt32(&nItem.Neighbor.OccupiedFlag, 1, 0)
-	}
-}
+// // Set neighbors as unoccupied
+// func SetNNUnoccupied(neighbors NeighborHeap) {
+// 	for _, nItem := range neighbors {
+// 		atomic.CompareAndSwapInt32(&nItem.Neighbor.OccupiedFlag, 1, 0)
+// 	}
+// }
 
 // Draw the path plan
 func (path *PathPlan) Draw() {}

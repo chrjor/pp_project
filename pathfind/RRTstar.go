@@ -14,7 +14,7 @@ import (
 // RRT* algorithm. Assumes samplePt is feasible
 func RRTstar(ms *config.MileStone, space *config.ConfigSpace) float32 {
 	// Find all neighbors of new MileStone within visibility radius
-	neighborhood := space.Path.GetNN(ms)
+	neighborhood := space.Path.GetNN(ms) // Discards sample if any neighbor is occupied
 	neighborhood = config.SetNNOccupied(neighborhood)
 	atomic.SwapInt32(&ms.OccupiedFlag, 1)
 
@@ -24,7 +24,7 @@ func RRTstar(ms *config.MileStone, space *config.ConfigSpace) float32 {
 	if neighborhood != nil && space.Path.Goal.Cost == 0 && IsGoalVisible(ms, space) {
 		// Prioritize first connection to goal point when visible
 		goalDist := config.CalcDistance(ms.GetPoint(), space.Path.Goal.GetPoint())
-		space.Path.Goal.SetParent(ms)
+		space.Path.Goal.SetParent(ms, goalDist)
 		ms.SetChild(space.Path.Goal)
 		space.Path.Goal.SetCost(ms.Cost + goalDist)
 	} else {
@@ -52,7 +52,7 @@ func ExtendPath(neighborhood config.NeighborHeap, space *config.ConfigSpace,
 
 		// Set parent and child
 		newDist := config.CalcDistance(nearest.GetPoint(), mileStone.GetPoint())
-		mileStone.SetParent(nearest)
+		mileStone.SetParent(nearest, newDist)
 		nearest.SetChild(mileStone)
 		mileStone.SetCost(nearest.Cost + newDist)
 	}
@@ -75,7 +75,7 @@ func Rewire(newMileStone *config.MileStone,
 		// Calc distances passing through the newMileStone
 		newDistThrough := newMileStone.Cost + distBetween
 		if newDistThrough < nItem.Neighbor.Cost {
-			nItem.Neighbor.SetParent(newMileStone)
+			nItem.Neighbor.SetParent(newMileStone, distBetween)
 			nItem.Neighbor.RemoveChild(newMileStone)
 			newMileStone.SetChild(nItem.Neighbor)
 			nItem.Neighbor.UpdateCost(newDistThrough - nItem.Neighbor.Cost)
@@ -85,7 +85,7 @@ func Rewire(newMileStone *config.MileStone,
 		// Calc distances passing to the newMileStone
 		newDistTo := nItem.Neighbor.Cost + distBetween
 		if newDistTo < newMileStone.Cost {
-			newMileStone.SetParent(nItem.Neighbor)
+			newMileStone.SetParent(nItem.Neighbor, distBetween)
 			newMileStone.RemoveChild(nItem.Neighbor)
 			nItem.Neighbor.SetChild(newMileStone)
 			newMileStone.UpdateCost(newDistTo - newMileStone.Cost)

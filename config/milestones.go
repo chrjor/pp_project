@@ -11,12 +11,12 @@ import (
 
 // MileStone is a node-like struct that represents a point in the path plan
 type MileStone struct {
-	point        *Point       // Point in the path plan
-	parent       *MileStone   // Parent of the milestone
-	children     []*MileStone // Children of the milestone
-	lock         sync.Mutex   // Lock for updating cost value (float32)
-	Cost         float32      // Cost of the milestone (lengthance from start)
-	OccupiedFlag int32        // Milestone is occupied by a thread
+	point    *Point            // Point in the path plan
+	parent   *MileStone        // Parent of the milestone
+	children MileStoneChildren // Children of the milestone
+	lock     sync.Mutex        // Lock for milestone
+	Cost     float32           // Cost of the milestone
+	ParDist  float32           // Distance from parent
 }
 
 // Create a new MileStone, assume point is feasible
@@ -24,7 +24,7 @@ func NewMileStone(pt *Point) *MileStone {
 	return &MileStone{
 		point:    pt,
 		parent:   nil,
-		children: make([]*MileStone, 0),
+		children: NewChildrenList(),
 		lock:     sync.Mutex{},
 	}
 }
@@ -34,44 +34,34 @@ func (ms *MileStone) GetPoint() *Point { return ms.point }
 
 // Add a child to a milestone
 func (ms *MileStone) SetChild(c *MileStone) {
-	for idx, child := range ms.children {
-		if child == nil {
-			ms.children[idx] = c
-			return
-		}
-	}
-	ms.children = append(ms.children, c)
+	ms.children.Add(c)
 }
 
 // Remove a child from a milestone
 func (ms *MileStone) RemoveChild(c *MileStone) {
-	for idx, child := range ms.children {
-		if child == c {
-			ms.children[idx] = nil
-			return
-		}
-	}
+	ms.children.Remove(c)
 }
 
 // Set the parent of a milestone
-func (ms *MileStone) SetParent(p *MileStone) {
+func (ms *MileStone) SetParent(p *MileStone, dist float32) {
 	if ms.parent != nil {
 		ms.parent.RemoveChild(ms)
 	}
+	ms.ParDist = dist
 	ms.parent = p
 }
 
-func (ms *MileStone) SetCost(cost float32) { ms.Cost = cost }
+func (ms *MileStone) SetCost(cost float32) {
+	ms.lock.Lock()
+	defer ms.lock.Unlock()
+	ms.Cost = cost
+}
 
 // Update the cost of a milestone and all of its children
 func (ms *MileStone) UpdateCost(diff float32) {
-	ms.lock.Lock()
-	ms.Cost += diff
-	ms.lock.Unlock()
-	for _, child := range ms.children {
-		if child == nil {
-			continue
-		}
+	ms.SetCost(ms.Cost + diff)
+	children := ms.children.GetChildren()
+	for _, child := range children {
 		child.UpdateCost(diff)
 	}
 }
