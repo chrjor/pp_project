@@ -14,7 +14,7 @@ type MileStone struct {
 	point    *Point            // Point in the path plan
 	parent   *MileStone        // Parent of the milestone
 	children MileStoneChildren // Children of the milestone
-	lock     sync.Mutex        // Lock for milestone
+	Lock     sync.Mutex        // Lock for milestone
 	Cost     float32           // Cost of the milestone
 	ParDist  float32           // Distance from parent
 }
@@ -25,7 +25,7 @@ func NewMileStone(pt *Point) *MileStone {
 		point:    pt,
 		parent:   nil,
 		children: NewChildrenList(),
-		lock:     sync.Mutex{},
+		Lock:     sync.Mutex{},
 	}
 }
 
@@ -44,6 +44,8 @@ func (ms *MileStone) RemoveChild(c *MileStone) {
 
 // Set the parent of a milestone
 func (ms *MileStone) SetParent(p *MileStone, dist float32) {
+	ms.Lock.Lock()
+	defer ms.Lock.Unlock()
 	if ms.parent != nil {
 		ms.parent.RemoveChild(ms)
 	}
@@ -52,8 +54,8 @@ func (ms *MileStone) SetParent(p *MileStone, dist float32) {
 }
 
 func (ms *MileStone) SetCost(cost float32) {
-	ms.lock.Lock()
-	defer ms.lock.Unlock()
+	ms.Lock.Lock()
+	defer ms.Lock.Unlock()
 	ms.Cost = cost
 }
 

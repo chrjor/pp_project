@@ -60,23 +60,5 @@ func (path *PathPlan) GetNN(new_ms *MileStone) NeighborHeap {
 	return neighborhood
 }
 
-// // Set neighbors as occupied, return nil and unset all if any are occupied
-// func SetNNOccupied(neighbors NeighborHeap) NeighborHeap {
-// 	for idx, nItem := range neighbors {
-// 		if !atomic.CompareAndSwapInt32(&nItem.Neighbor.OccupiedFlag, 0, 1) {
-// 			SetNNUnoccupied(neighbors[:idx+1])
-// 			return nil
-// 		}
-// 	}
-// 	return neighbors
-// }
-
-// // Set neighbors as unoccupied
-// func SetNNUnoccupied(neighbors NeighborHeap) {
-// 	for _, nItem := range neighbors {
-// 		atomic.CompareAndSwapInt32(&nItem.Neighbor.OccupiedFlag, 1, 0)
-// 	}
-// }
-
 // Draw the path plan
 func (path *PathPlan) Draw() {}

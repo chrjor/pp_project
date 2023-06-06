@@ -8,15 +8,12 @@ package pathfind
 
 import (
 	"pp_project/config"
-	"sync/atomic"
 )
 
 // RRT* algorithm. Assumes samplePt is feasible
 func RRTstar(ms *config.MileStone, space *config.ConfigSpace) float32 {
 	// Find all neighbors of new MileStone within visibility radius
-	neighborhood := space.Path.GetNN(ms) // Discards sample if any neighbor is occupied
-	neighborhood = config.SetNNOccupied(neighborhood)
-	atomic.SwapInt32(&ms.OccupiedFlag, 1)
+	neighborhood := space.Path.GetNN(ms)
 
 	// Extend the path from the given point to the nearest point in the tree
 	neighborhood = ExtendPath(neighborhood, space, ms)
@@ -27,11 +24,10 @@ func RRTstar(ms *config.MileStone, space *config.ConfigSpace) float32 {
 		space.Path.Goal.SetParent(ms, goalDist)
 		ms.SetChild(space.Path.Goal)
 		space.Path.Goal.SetCost(ms.Cost + goalDist)
+
 	} else {
 		// Rewire the tree to account for the new MileStone
 		Rewire(ms, neighborhood, space)
-		config.SetNNUnoccupied(neighborhood)
-		atomic.SwapInt32(&ms.OccupiedFlag, 0)
 	}
 	return space.Path.Goal.Cost
 }
