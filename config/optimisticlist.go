@@ -8,20 +8,15 @@ package config
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
-// Children is an interface for a milestone's children
-type MileStoneChildren interface {
-	Add(*MileStone)
-	Remove(*MileStone) bool
-	Contains(*MileStone) bool
-	GetChildren() []*MileStone
-}
-
-// milestoneChildren is a struct that implements the ChildrenList interface
-type milestoneChildren struct {
-	head *child
-	tail *child
+// MileStoneChildren is a struct that implements the ChildrenList interface
+type MileStoneChildren struct {
+	head       *child
+	tail       *child
+	cond       *sync.Cond
+	updateFlag int32
 }
 
 // child is a struct that represents a child node
@@ -50,15 +45,22 @@ func newChild(body *MileStone, next *child) *child {
 }
 
 // NewChildrenList creates a new ChildrenList
-func NewChildrenList() MileStoneChildren {
-	return &milestoneChildren{
-		head: newChild(nil, nil),
-		tail: newChild(nil, nil),
+func NewChildrenList() *MileStoneChildren {
+	return &MileStoneChildren{
+		head:       newChild(nil, nil),
+		tail:       newChild(nil, nil),
+		cond:       sync.NewCond(&sync.Mutex{}),
+		updateFlag: 0,
 	}
 }
 
 // Add adds a child to the list
-func (c *milestoneChildren) Add(body *MileStone) {
+func (c *MileStoneChildren) Add(body *MileStone) {
+	// Wait on update flag if cost is being updated
+	for c.updateFlag == 1 {
+		c.cond.Wait()
+	}
+
 	// Create new child
 	newChildRef := newChild(body, nil)
 
@@ -100,7 +102,12 @@ func (c *milestoneChildren) Add(body *MileStone) {
 
 // Remove removes a child from the list. The function returns true if the
 // child was removed, otherwise, false.
-func (c *milestoneChildren) Remove(child *MileStone) bool {
+func (c *MileStoneChildren) Remove(child *MileStone) bool {
+	// Wait on update flag if cost is being updated
+	for c.updateFlag == 1 {
+		c.cond.Wait()
+	}
+
 	// Empty feed
 	if c.head.next == c.tail {
 		return false
@@ -143,7 +150,7 @@ func (c *milestoneChildren) Remove(child *MileStone) bool {
 
 // Contains determines whether a child is in the list. The function returns
 // true if the child is in the list, otherwise, false.
-func (c *milestoneChildren) Contains(child *MileStone) bool {
+func (c *MileStoneChildren) Contains(child *MileStone) bool {
 	// Empty list
 	if c.head.next == c.tail {
 		return false
@@ -168,8 +175,8 @@ func (c *milestoneChildren) Contains(child *MileStone) bool {
 
 // validate determines whether a child is valid. The function returns
 // true if the feed is valid, otherwise, false.
-func (c *milestoneChildren) validate(prevChild *child, curChild *child) bool {
-	node := c.head
+func (c *MileStoneChildren) validate(prevChild *child, curChild *child) bool {
+	node := c.head.next
 	for {
 		if node == prevChild {
 			return curChild == node.next
@@ -181,15 +188,62 @@ func (c *milestoneChildren) validate(prevChild *child, curChild *child) bool {
 	}
 }
 
-// GetChildren returns a list of children
-func (c *milestoneChildren) GetChildren() []*MileStone {
-	children := make([]*MileStone, 0)
-	node := c.head
+// Applies a function to all children in the list (c
+func BranchApply(c *MileStoneChildren,
+	f func(*MileStone, interface{}),
+	data interface{},
+) {
+	// Flag sub-branch for update
+	flagBranch(c)
+	// Apply function to all children in sub-branch
+	branchUpdate(c, f, data)
+}
+
+// Recursively sets the update flag for all children in the list (c)
+func flagBranch(c *MileStoneChildren) {
+	// Set c's update flag
+	if !atomic.CompareAndSwapInt32(&c.updateFlag, 0, 1) {
+		for c.updateFlag == 1 {
+			c.cond.Wait()
+			if atomic.CompareAndSwapInt32(&c.updateFlag, 0, 1) {
+				break
+			}
+		}
+	}
+	// Set update flag for all children
+	node := c.head.next
 	for {
+		flagBranch(node.body.children)
 		if node.next == nil {
-			return children
+			return
 		} else {
-			children = append(children, node.body)
+			node = node.next
+		}
+	}
+}
+
+// RecursiveApply applies a function to all children in the list (c)
+func branchUpdate(c *MileStoneChildren,
+	f func(*MileStone, interface{}),
+	data interface{},
+) {
+	// Set c's update flag
+	c.cond.L.Lock()
+	defer c.cond.L.Unlock()
+	node := c.head.next
+	for {
+		// Apply function to child and all children of child
+		f(node.body, data)
+		branchUpdate(node.body.children, f, data)
+
+		if node.next == nil {
+			// Reset update flag and notify when done
+			atomic.AddInt32(&c.updateFlag, -1)
+			c.cond.Broadcast()
+			return
+
+		} else {
+			// Keep iterating down list if not done
 			node = node.next
 		}
 	}

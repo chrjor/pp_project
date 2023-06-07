@@ -11,12 +11,12 @@ import (
 
 // MileStone is a node-like struct that represents a point in the path plan
 type MileStone struct {
-	point    *Point            // Point in the path plan
-	parent   *MileStone        // Parent of the milestone
-	children MileStoneChildren // Children of the milestone
-	Lock     sync.Mutex        // Lock for milestone
-	Cost     float32           // Cost of the milestone
-	ParDist  float32           // Distance from parent
+	point    *Point             // Point in the path plan
+	parent   *MileStone         // Parent of the milestone
+	children *MileStoneChildren // Children of the milestone
+	Lock     sync.Mutex         // Lock for milestone
+	Cost     float32            // Cost of the milestone
+	ParDist  float32            // Distance from parent
 }
 
 // Create a new MileStone, assume point is feasible
@@ -61,11 +61,10 @@ func (ms *MileStone) SetCost(cost float32) {
 
 // Update the cost of a milestone and all of its children
 func (ms *MileStone) UpdateCost(diff float32) {
-	ms.SetCost(ms.Cost + diff)
-	children := ms.children.GetChildren()
-	for _, child := range children {
-		child.UpdateCost(diff)
+	costUpdate := func(m *MileStone, data interface{}) {
+		m.SetCost(m.Cost + diff)
 	}
+	BranchApply(ms.children, costUpdate, nil)
 }
 
 // Set the milestone's new point location as min(delta, length) lengthance from

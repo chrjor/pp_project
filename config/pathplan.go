@@ -4,10 +4,6 @@
 
 package config
 
-import (
-	"container/heap"
-)
-
 // PathPlan is a struct used for path planning
 type PathPlan struct {
 	pathHead   *MileStone // Root of the path tree
@@ -43,19 +39,14 @@ func (path *PathPlan) GetNN(new_ms *MileStone) NeighborHeap {
 
 	// Use DFS to find all neighbors within radius and return as heap
 	var neighborhood NeighborHeap
-	var DFS func(*MileStone)
-
-	DFS = func(ms *MileStone) {
+	RecurseNN := func(ms *MileStone, heap interface{}) {
 		dist := CalcDistance(ms.point, new_ms.point)
 		if dist <= path.Radius {
 			neighbor := NewNeighborItem(ms, dist)
-			heap.Push(&neighborhood, neighbor)
-		}
-		for _, child := range ms.children.GetChildren() {
-			DFS(child)
+			heap.(*NeighborHeap).Push(neighbor)
 		}
 	}
-	DFS(path.pathHead)
+	BranchApply(path.pathHead.children, RecurseNN, neighborhood)
 
 	return neighborhood
 }
