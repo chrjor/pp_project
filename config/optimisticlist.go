@@ -54,6 +54,11 @@ func NewChildrenList() *MileStoneChildren {
 	}
 }
 
+// Checks if the list is empty
+func (c *MileStoneChildren) IsEmpty() bool {
+	return c.head.next == c.tail
+}
+
 // Add adds a child to the list
 func (c *MileStoneChildren) Add(body *MileStone) {
 	// Wait on update flag if cost is being updated
@@ -71,8 +76,6 @@ func (c *MileStoneChildren) Add(body *MileStone) {
 		if curChild.dist > newChildRef.dist || curChild == c.tail {
 			prevChild.lock.Lock()
 			curChild.lock.Lock()
-			defer prevChild.lock.Unlock()
-			defer curChild.lock.Unlock()
 
 			// Start over if invalid
 			if !c.validate(prevChild, curChild) {
@@ -82,6 +85,8 @@ func (c *MileStoneChildren) Add(body *MileStone) {
 				curChild = c.head
 				continue
 			}
+			defer prevChild.lock.Unlock()
+			defer curChild.lock.Unlock()
 
 			// Add new child if valid
 			if prevChild == curChild {
@@ -120,8 +125,6 @@ func (c *MileStoneChildren) Remove(child *MileStone) bool {
 		if child.ParDist == curChild.dist && child == curChild.body {
 			prevChild.lock.Lock()
 			curChild.lock.Lock()
-			defer prevChild.lock.Unlock()
-			defer curChild.lock.Unlock()
 
 			// Start over if invalid
 			if !c.validate(prevChild, curChild) {
@@ -131,6 +134,8 @@ func (c *MileStoneChildren) Remove(child *MileStone) bool {
 				curChild = c.head
 				continue
 			}
+			defer curChild.lock.Unlock()
+			defer prevChild.lock.Unlock()
 
 			// Remove child if valid
 			prevChild.next = curChild.next
@@ -188,14 +193,16 @@ func (c *MileStoneChildren) validate(prevChild *child, curChild *child) bool {
 	}
 }
 
+// Helper functions for MileStoneChildren list implementation
+
 // Applies a function to all children in the list (c
 func BranchApply(c *MileStoneChildren,
 	f func(*MileStone, interface{}),
 	data interface{},
 ) {
-	// Flag sub-branch for update
+	// Flag all children in sub-branch for update
 	flagBranch(c)
-	// Apply function to all children in sub-branch
+	// Apply function to all children in sub-branch and unflag
 	branchUpdate(c, f, data)
 }
 
@@ -213,7 +220,9 @@ func flagBranch(c *MileStoneChildren) {
 	// Set update flag for all children
 	node := c.head.next
 	for {
-		flagBranch(node.body.children)
+		if !node.body.children.IsEmpty() {
+			flagBranch(node.body.children)
+		}
 		if node.next == nil {
 			return
 		} else {
@@ -234,8 +243,9 @@ func branchUpdate(c *MileStoneChildren,
 	for {
 		// Apply function to child and all children of child
 		f(node.body, data)
-		branchUpdate(node.body.children, f, data)
-
+		if !node.body.children.IsEmpty() {
+			branchUpdate(node.body.children, f, data)
+		}
 		if node.next == nil {
 			// Reset update flag and notify when done
 			atomic.AddInt32(&c.updateFlag, -1)

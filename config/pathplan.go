@@ -37,7 +37,7 @@ func (path *PathPlan) GetDistToGoal() float32 {
 // Get all neighbors in visibilty of a MileStone, assuming MileStone is feasible
 func (path *PathPlan) GetNN(new_ms *MileStone) NeighborHeap {
 
-	// Use DFS to find all neighbors within radius and return as heap
+	// Find all neighbors of new MileStone within visibility radius
 	var neighborhood NeighborHeap
 	RecurseNN := func(ms *MileStone, heap interface{}) {
 		dist := CalcDistance(ms.point, new_ms.point)
