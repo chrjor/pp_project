@@ -46,9 +46,12 @@ func newChild(body *MileStone, next *child) *child {
 
 // NewChildrenList creates a new ChildrenList
 func NewChildrenList() *MileStoneChildren {
+	head := newChild(nil, nil)
+	tail := newChild(nil, nil)
+	head.next = tail
 	return &MileStoneChildren{
-		head:       newChild(nil, nil),
-		tail:       newChild(nil, nil),
+		head:       head,
+		tail:       tail,
 		cond:       sync.NewCond(&sync.Mutex{}),
 		updateFlag: 0,
 	}
@@ -63,7 +66,9 @@ func (c *MileStoneChildren) IsEmpty() bool {
 func (c *MileStoneChildren) Add(body *MileStone) {
 	// Wait on update flag if cost is being updated
 	for c.updateFlag == 1 {
+		c.cond.L.Lock()
 		c.cond.Wait()
+		c.cond.L.Unlock()
 	}
 
 	// Create new child
@@ -88,12 +93,8 @@ func (c *MileStoneChildren) Add(body *MileStone) {
 			defer prevChild.lock.Unlock()
 			defer curChild.lock.Unlock()
 
-			// Add new child if valid
-			if prevChild == curChild {
-				c.head = newChildRef
-			} else {
-				prevChild.next = newChildRef
-			}
+			// Add new child
+			prevChild.next = newChildRef
 			newChildRef.next = curChild
 			return
 
@@ -110,7 +111,9 @@ func (c *MileStoneChildren) Add(body *MileStone) {
 func (c *MileStoneChildren) Remove(child *MileStone) bool {
 	// Wait on update flag if cost is being updated
 	for c.updateFlag == 1 {
+		c.cond.L.Lock()
 		c.cond.Wait()
+		c.cond.L.Unlock()
 	}
 
 	// Empty feed
@@ -196,65 +199,57 @@ func (c *MileStoneChildren) validate(prevChild *child, curChild *child) bool {
 // Helper functions for MileStoneChildren list implementation
 
 // Applies a function to all children in the list (c
-func BranchApply(c *MileStoneChildren,
-	f func(*MileStone, interface{}),
-	data interface{},
-) {
+func BranchApply(c *MileStoneChildren, f func(*MileStone)) {
 	// Flag all children in sub-branch for update
 	flagBranch(c)
 	// Apply function to all children in sub-branch and unflag
-	branchUpdate(c, f, data)
+	branchUpdate(c, f)
 }
 
 // Recursively sets the update flag for all children in the list (c)
 func flagBranch(c *MileStoneChildren) {
 	// Set c's update flag
 	if !atomic.CompareAndSwapInt32(&c.updateFlag, 0, 1) {
+		c.cond.L.Lock()
 		for c.updateFlag == 1 {
 			c.cond.Wait()
 			if atomic.CompareAndSwapInt32(&c.updateFlag, 0, 1) {
 				break
 			}
 		}
+		c.cond.L.Unlock()
 	}
 	// Set update flag for all children
 	node := c.head.next
 	for {
-		if !node.body.children.IsEmpty() {
-			flagBranch(node.body.children)
-		}
-		if node.next == nil {
-			return
-		} else {
+		if node != c.tail {
+			if !node.body.children.IsEmpty() {
+				flagBranch(node.body.children)
+			}
 			node = node.next
+		} else {
+			return
 		}
 	}
 }
 
 // RecursiveApply applies a function to all children in the list (c)
-func branchUpdate(c *MileStoneChildren,
-	f func(*MileStone, interface{}),
-	data interface{},
-) {
+func branchUpdate(c *MileStoneChildren, f func(*MileStone)) {
 	// Set c's update flag
-	c.cond.L.Lock()
-	defer c.cond.L.Unlock()
 	node := c.head.next
 	for {
 		// Apply function to child and all children of child
-		f(node.body, data)
-		if !node.body.children.IsEmpty() {
-			branchUpdate(node.body.children, f, data)
-		}
-		if node.next == nil {
+		if node != c.tail {
+			f(node.body)
+			if !node.body.children.IsEmpty() {
+				branchUpdate(node.body.children, f)
+			}
+			node = node.next
+		} else {
 			// Reset update flag and notify when done
 			atomic.AddInt32(&c.updateFlag, -1)
 			c.cond.Broadcast()
 			return
-
-		} else {
-			// Keep iterating down list if not done
-			node = node.next
 		}
 	}
 }

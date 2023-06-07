@@ -61,10 +61,10 @@ func (ms *MileStone) SetCost(cost float32) {
 
 // Update the cost of a milestone and all of its children
 func (ms *MileStone) UpdateCost(diff float32) {
-	costUpdate := func(m *MileStone, data interface{}) {
+	costUpdate := func(m *MileStone) {
 		m.SetCost(m.Cost + diff)
 	}
-	BranchApply(ms.children, costUpdate, nil)
+	BranchApply(ms.children, costUpdate)
 }
 
 // Set the milestone's new point location as min(delta, length) lengthance from
