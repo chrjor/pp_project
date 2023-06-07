@@ -28,10 +28,14 @@ fi
 
 # Set benchmark parameters
 input="$1"
-sample_sizes=( "40000" "80000" "160000" "640000" )
+sample_sizes=( "4000000" "8000000" "16000000" "32000000" )
 
 # Create/prep output the file
-out=$(mktemp)
+out="benchmark/output.txt"
+if [ -f "$out" ]; then
+    rm "$out"
+fi
+touch "$out"
 header=( "model" "sample_size" "threads" ) 
 header+=( "test1" "test2"  "test3" "test4" "test5" )
 echo "${header[@]}" >> "$out"

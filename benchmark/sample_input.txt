@@ -1,6 +1,6 @@
 window,4000,8000
-radius,250
-delta,250
+radius,15
+delta,10
 start,100,100
 goal,7900,3900
 circle,4000,2000,1500
